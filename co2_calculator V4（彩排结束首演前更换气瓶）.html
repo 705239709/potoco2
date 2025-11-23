@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>演出 CO₂ 气瓶物流规划 (彩排换瓶版)</title>
+    <style>
+        :root {
+            --primary: #7c3aed; /* 紫色主题 */
+            --primary-dark: #5b21b6;
+            --bg: #f3f4f6;
+            --card: #ffffff;
+            --text: #1f2937;
+            --border: #e5e7eb;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --warning: #ca8a04;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 { text-align: center; color: var(--primary-dark); font-weight: 800; margin-bottom: 2rem; }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border);
+        }
+
+        h2 { 
+            font-size: 1.1rem; 
+            border-bottom: 2px solid var(--primary); 
+            padding-bottom: 8px; 
+            margin-top: 0; 
+            color: var(--primary-dark); 
+        }
+
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 5px; color: #4b5563; }
+        
+        input[type="date"], input[type="number"] {
+            width: 100%; padding: 10px;
+            border: 1px solid var(--border); border-radius: 8px;
+            font-size: 1rem; box-sizing: border-box;
+        }
+        input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; }
+        .checkbox-item {
+            display: flex; align-items: center;
+            background: #f9fafb; padding: 8px 12px;
+            border-radius: 6px; border: 1px solid var(--border);
+            font-size: 0.9rem; cursor: pointer;
+        }
+        .checkbox-item:hover { background: #ede9fe; border-color: var(--primary); }
+        .checkbox-item input { margin-right: 8px; accent-color: var(--primary); }
+
+        .btn {
+            display: block; width: 100%; padding: 16px;
+            background-color: var(--primary); color: white;
+            border: none; border-radius: 10px;
+            font-size: 1.1rem; font-weight: 700;
+            cursor: pointer; transition: background 0.2s;
+            box-shadow: 0 4px 6px rgba(124, 58, 237, 0.2);
+        }
+        .btn:hover { background-color: var(--primary-dark); }
+
+        .report-section { display: none; margin-top: 30px; }
+        
+        .summary-box {
+            background: #ecfdf5; border: 1px solid #6ee7b7;
+            padding: 20px; border-radius: 10px; margin-bottom: 20px;
+        }
+
+        .alert-box {
+            background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+            padding: 15px; border-radius: 10px; margin-bottom: 20px; display: none;
+        }
+
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        th, td { padding: 12px; text-align: center; border-bottom: 1px solid #f3f4f6; font-size: 0.9rem; }
+        th { background-color: #f8fafc; font-weight: 600; color: #475569; }
+        tr:last-child td { border-bottom: none; }
+
+        .highlight-row { background-color: #f0fdf4; }
+        .rehearsal-row { background-color: #fff7ed; } /* Orange tint for rehearsal day */
+        .stock-low { color: var(--danger); font-weight: bold; }
+        .del-badge { 
+            display: inline-block; background: var(--success); color: white; 
+            padding: 2px 8px; border-radius: 999px; font-size: 0.85em; font-weight: 600;
+        }
+        .note { font-size: 0.8em; color: #6b7280; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>演出 CO₂ 气瓶物流规划 (彩排换瓶版)</h1>
+
+    <div class="main-grid">
+        <!-- 1. 日期设置 -->
+        <div class="card">
+            <h2>📅 1. 演出时间</h2>
+            <div class="form-group">
+                <label>首演日期 (第一周周二)</label>
+                <input type="date" id="startDate">
+                <div class="note">*当天下午彩排，晚上首演</div>
+            </div>
+            <div class="form-group">
+                <label>当前日期 (计算起点)</label>
+                <input type="date" id="currentDate">
+            </div>
+            <div class="form-group">
+                <label>结束日期</label>
+                <input type="date" id="endDate">
+            </div>
+        </div>
+
+        <!-- 2. 库存与限制 -->
+        <div class="card">
+            <h2>🏭 2. 场地与限制 (分体设置)</h2>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:10px;">
+                <!-- 30L -->
+                <div style="background:#f9fafb; padding:10px; border-radius:8px;">
+                    <strong style="color:#4b5563">30L 气瓶</strong>
+                    <div class="form-group" style="margin-top:5px">
+                        <label>剧场当前备用余量</label>
+                        <input type="number" id="stock30" value="0" min="0" step="0.5">
+                    </div>
+                    <div class="form-group">
+                        <label>场地存放上限 (个)</label>
+                        <input type="number" id="venueMax30" value="60">
+                    </div>
+                    <div class="form-group">
+                        <label>供应商总库存</label>
+                        <input type="number" id="suppMax30" value="100">
+                    </div>
+                </div>
+
+                <!-- 15L -->
+                <div style="background:#f9fafb; padding:10px; border-radius:8px;">
+                    <strong style="color:#4b5563">15L 气瓶</strong>
+                    <div class="form-group" style="margin-top:5px">
+                        <label>剧场当前备用余量</label>
+                        <input type="number" id="stock15" value="0" min="0" step="0.5">
+                    </div>
+                    <div class="form-group">
+                        <label>场地存放上限 (个)</label>
+                        <input type="number" id="venueMax15" value="40">
+                    </div>
+                    <div class="form-group">
+                        <label>供应商总库存</label>
+                        <input type="number" id="suppMax15" value="50">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 运送规则 -->
+        <div class="card">
+            <h2>🚛 3. 运送规则</h2>
+            <div class="form-group">
+                <label>允许送货的日期：</label>
+                <div class="checkbox-group" id="deliveryDays">
+                    <label class="checkbox-item"><input type="checkbox" value="1"> 周一</label>
+                    <label class="checkbox-item"><input type="checkbox" value="2" checked> 周二</label>
+                    <label class="checkbox-item"><input type="checkbox" value="3"> 周三</label>
+                    <label class="checkbox-item"><input type="checkbox" value="4"> 周四</label>
+                    <label class="checkbox-item"><input type="checkbox" value="5" checked> 周五</label>
+                    <label class="checkbox-item"><input type="checkbox" value="6"> 周六</label>
+                    <label class="checkbox-item"><input type="checkbox" value="0"> 周日</label>
+                </div>
+                <div class="note" style="margin-top:10px;">
+                    *首演日若无气瓶，系统将强制安排送货。<br>
+                    *系统会“向前看”以防止在非送货日断供。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="btn" onclick="calculateLogistics()">开始计算</button>
+
+    <div id="resultSection" class="report-section">
+        <div id="alertBox" class="alert-box"></div>
+        <div id="summaryBox" class="summary-box"></div>
+        
+        <div style="overflow-x: auto;">
+            <table id="resultTable">
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>星期</th>
+                        <th>安排</th>
+                        <th>30L消耗</th>
+                        <th>15L消耗</th>
+                        <th>30L补货</th>
+                        <th>15L补货</th>
+                        <th>30L结余</th>
+                        <th>15L结余</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 常量定义 ---
+    // 常规单场消耗
+    // 30L: 2x1 + 2x0.5 + 6x0.25 = 4.5
+    const SHOW_USAGE_30 = 4.5;
+    // 15L: 2x0.25 = 0.5
+    const SHOW_USAGE_15 = 0.5;
+    
+    // 全套连接数量 (用于彩排换瓶计算)
+    // 30L点位: 2+2+6 = 10个点位 -> 10瓶
+    const CONNECTED_30 = 10;
+    // 15L点位: 2个点位 -> 2瓶
+    const CONNECTED_15 = 2;
+
+    const SAFETY = 2;
+    const DAYS_CN = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+    // --- 初始化 ---
+    window.onload = () => {
+        const today = new Date();
+        document.getElementById('startDate').valueAsDate = today;
+        document.getElementById('currentDate').valueAsDate = today;
+        const end = new Date(today);
+        end.setDate(today.getDate() + 14);
+        document.getElementById('endDate').valueAsDate = end;
+    };
+
+    // --- 消耗计算核心逻辑 ---
+    function getDailyUsage(dateObj, startDateObj) {
+        const d = new Date(dateObj); d.setHours(0,0,0,0);
+        const s = new Date(startDateObj); s.setHours(0,0,0,0);
+        
+        const diffTime = d - s;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) return { u30: 0, u15: 0, note: "" };
+
+        const weekday = d.getDay();
+
+        // 判断第一周 (首演日所在周的周日及之前)
+        const startDay = s.getDay(); // 通常是2
+        const daysUntilSunday = startDay === 0 ? 0 : (7 - startDay);
+        const isFirstWeek = diffDays <= daysUntilSunday;
+
+        // 1. 首演日 (第一周周二)
+        if (diffDays === 0) {
+            // 逻辑：彩排消耗掉全套连接瓶 + 晚场消耗常规量
+            // 30L: 10 (彩排换新) + 4.5 (晚场) = 14.5
+            // 15L: 2 (彩排换新) + 0.5 (晚场) = 2.5
+            return { 
+                u30: CONNECTED_30 + SHOW_USAGE_30, 
+                u15: CONNECTED_15 + SHOW_USAGE_15,
+                note: "彩排换瓶+首演"
+            };
+        }
+
+        // 2. 第一周其他时间
+        if (isFirstWeek) {
+            if (weekday >= 3 && weekday <= 5) { // Wed-Fri
+                return { u30: SHOW_USAGE_30, u15: SHOW_USAGE_15, note: "1场" };
+            }
+            if (weekday === 6 || weekday === 0) { // Sat-Sun
+                return { u30: SHOW_USAGE_30 * 2, u15: SHOW_USAGE_15 * 2, note: "2场" };
+            }
+        } 
+        // 3. 后续周
+        else {
+            if (weekday === 1) return { u30: 0, u15: 0, note: "休息" }; // Mon
+            if (weekday >= 2 && weekday <= 5) { // Tue-Fri
+                return { u30: SHOW_USAGE_30, u15: SHOW_USAGE_15, note: "1场" };
+            }
+            if (weekday === 6 || weekday === 0) { // Sat-Sun
+                return { u30: SHOW_USAGE_30 * 2, u15: SHOW_USAGE_15 * 2, note: "2场" };
+            }
+        }
+
+        return { u30: 0, u15: 0, note: "" };
+    }
+
+    // --- 主计算函数 ---
+    function calculateLogistics() {
+        // 1. 获取输入
+        const startDate = new Date(document.getElementById('startDate').value); startDate.setHours(0,0,0,0);
+        const currDate = new Date(document.getElementById('currentDate').value); currDate.setHours(0,0,0,0);
+        const endDate = new Date(document.getElementById('endDate').value); endDate.setHours(0,0,0,0);
+
+        if (endDate < currDate) { alert("结束日期不能早于当前日期"); return; }
+
+        let stock30 = parseFloat(document.getElementById('stock30').value);
+        let stock15 = parseFloat(document.getElementById('stock15').value);
+        
+        const venueMax30 = parseInt(document.getElementById('venueMax30').value);
+        const venueMax15 = parseInt(document.getElementById('venueMax15').value);
+        const suppMax30 = parseInt(document.getElementById('suppMax30').value);
+        const suppMax15 = parseInt(document.getElementById('suppMax15').value);
+
+        const allowedDays = Array.from(document.querySelectorAll('#deliveryDays input:checked')).map(cb => parseInt(cb.value));
+        if (allowedDays.length === 0) { alert("请至少选择一个送货日"); return; }
+
+        // 2. 辅助：计算未来总需求 (用于预算控制-刚好用完)
+        const getFutureDemand = (fromD) => {
+            let d = new Date(fromD);
+            let r30 = 0, r15 = 0;
+            while (d <= endDate) {
+                let usage = getDailyUsage(d, startDate);
+                r30 += usage.u30;
+                r15 += usage.u15;
+                d.setDate(d.getDate() + 1);
+            }
+            return { r30, r15 };
+        };
+
+        // 3. 辅助：检查断供风险 (Gap Risk)
+        // 检查从明天开始到下一个送货日之间，库存是否会耗尽
+        const checkRisk = (fromD, cur30, cur15) => {
+            let d = new Date(fromD); d.setDate(d.getDate() + 1);
+            let use30 = 0, use15 = 0;
+            for(let i=0; i<30; i++) { // 向前看30天
+                if(d > endDate) break;
+                let u = getDailyUsage(d, startDate);
+                use30 += u.u30;
+                use15 += u.u15;
+                
+                // 检查是否能撑住
+                if ((cur30 - use30 < SAFETY) || (cur15 - use15 < SAFETY)) return true; // 风险！
+
+                // 如果遇到送货日，且撑住了，则无风险
+                if (allowedDays.includes(d.getDay())) return false;
+                
+                d.setDate(d.getDate() + 1);
+            }
+            return false; // 到了结束日期都没风险
+        };
+
+        // 4. 模拟循环
+        let loopDate = new Date(currDate);
+        let logs = [];
+        let alerts = [];
+        let totalDel30 = 0, totalDel15 = 0;
+        let trips = 0;
+
+        // 标记是否是计算的第一天，且是首演日 (用于处理初始空库的情况)
+        let isStart = (loopDate.getTime() === startDate.getTime());
+
+        while(loopDate <= endDate) {
+            let dateStr = loopDate.toLocaleDateString('zh-CN', {month:'2-digit', day:'2-digit'});
+            let dayOfWeek = loopDate.getDay();
+            let usage = getDailyUsage(loopDate, startDate);
+            
+            let isDeliveryDay = allowedDays.includes(dayOfWeek);
+
+            // 判定送货需求
+            // A. 紧急：当前库存 < 消耗 + 安全
+            // B. 风险：不送货的话，撑不到下次送货
+            // C. 初始：首演日且库存不足 (特例)
+            
+            let urgent = (stock30 - usage.u30 < SAFETY) || (stock15 - usage.u15 < SAFETY);
+            let risky = false;
+            if (isDeliveryDay) {
+                risky = checkRisk(loopDate, stock30 - usage.u30, stock15 - usage.u15);
+            }
+
+            let needDel = urgent || risky;
+            if (isStart && urgent) needDel = true; // 强制第一天允许送货如果不够
+
+            let del30 = 0;
+            let del15 = 0;
+
+            if (needDel) {
+                if (!isDeliveryDay && !isStart) {
+                    alerts.push(`[${dateStr}] ❌ <strong>非送货日断供警告：</strong> 请增加送货日或在上一个周期多运送！`);
+                    // 强制补足
+                    del30 = Math.ceil(Math.max(0, usage.u30 + SAFETY - stock30));
+                    del15 = Math.ceil(Math.max(0, usage.u15 + SAFETY - stock15));
+                } else {
+                    trips++;
+                    // 计算补货量：贪婪填满策略 (减少频次) + 预算上限 (不浪费)
+                    let future = getFutureDemand(loopDate);
+                    
+                    // 最小需求 (活过今天)
+                    let minNeed30 = Math.max(0, usage.u30 + SAFETY - stock30);
+                    let minNeed15 = Math.max(0, usage.u15 + SAFETY - stock15);
+
+                    // 预算合理上限 (总需求+备用)
+                    let budgetCap30 = future.r30 + SAFETY;
+                    let budgetCap15 = future.r15 + SAFETY;
+
+                    // 30L 计算
+                    // 目标 = Min(供应商库存, 预算合理上限)
+                    // 补货量 = 目标 - 当前库存
+                    let plan30 = Math.min(suppMax30, budgetCap30) - stock30;
+                    plan30 = Math.max(minNeed30, plan30); // 不能低于最小需求
+                    
+                    // 场地限制 (Venue Constraint)
+                    let space30 = venueMax30 - stock30;
+                    
+                    // 最终决定
+                    if (Math.ceil(plan30) > space30) {
+                        if (Math.ceil(minNeed30) > space30) {
+                            alerts.push(`[${dateStr}] ⚠️ <strong>30L场地空间不足：</strong> 无法存放满足今日消耗(${usage.u30})所需的数量！`);
+                            del30 = Math.ceil(minNeed30); // 强制塞入
+                        } else {
+                            del30 = Math.floor(space30); // 填满仓库
+                        }
+                    } else {
+                        del30 = Math.ceil(plan30);
+                    }
+
+                    // 15L 计算 (同上)
+                    let plan15 = Math.min(suppMax15, budgetCap15) - stock15;
+                    plan15 = Math.max(minNeed15, plan15);
+                    
+                    let space15 = venueMax15 - stock15;
+
+                    if (Math.ceil(plan15) > space15) {
+                        if (Math.ceil(minNeed15) > space15) {
+                            alerts.push(`[${dateStr}] ⚠️ <strong>15L场地空间不足：</strong> 无法存放满足今日消耗(${usage.u15})所需的数量！`);
+                            del15 = Math.ceil(minNeed15);
+                        } else {
+                            del15 = Math.floor(space15);
+                        }
+                    } else {
+                        del15 = Math.ceil(plan15);
+                    }
+                    
+                    totalDel30 += del30;
+                    totalDel15 += del15;
+                }
+            }
+
+            // 更新库存
+            stock30 = stock30 + del30 - usage.u30;
+            stock15 = stock15 + del15 - usage.u15;
+
+            logs.push({
+                date: dateStr,
+                day: DAYS_CN[dayOfWeek],
+                note: usage.note,
+                u30: usage.u30, u15: usage.u15,
+                d30: del30, d15: del15,
+                r30: stock30, r15: stock15
+            });
+
+            loopDate.setDate(loopDate.getDate() + 1);
+            isStart = false;
+        }
+
+        // 5. 输出结果
+        const alertBox = document.getElementById('alertBox');
+        if (alerts.length > 0) {
+            alertBox.innerHTML = alerts.join("<br>");
+            alertBox.style.display = "block";
+        } else {
+            alertBox.style.display = "none";
+        }
+
+        const summaryBox = document.getElementById('summaryBox');
+        let final30 = Math.max(0, stock30 - SAFETY);
+        let final15 = Math.max(0, stock15 - SAFETY);
+        let status = (final30 < 1 && final15 < 1) 
+            ? "<span style='color:var(--success)'>✅ 完美 (无浪费)</span>" 
+            : "<span style='color:var(--warning)'>⚠️ 有少量剩余</span>";
+
+        summaryBox.innerHTML = `
+            <strong>📊 规划结果：</strong><br>
+            运送次数：<strong>${trips}</strong> 次<br>
+            补货总量：30L <strong>${totalDel30}</strong> 瓶，15L <strong>${totalDel15}</strong> 瓶<br>
+            最终剩余 (除备用)：30L ${final30.toFixed(1)} 瓶，15L ${final15.toFixed(1)} 瓶<br>
+            状态：${status}
+        `;
+
+        const tbody = document.querySelector("#resultTable tbody");
+        tbody.innerHTML = "";
+        logs.forEach(r => {
+            let tr = document.createElement('tr');
+            if (r.d30 > 0 || r.d15 > 0) tr.className = "highlight-row";
+            if (r.note.includes("彩排")) tr.className = "rehearsal-row";
+
+            let d30 = r.d30 > 0 ? `<span class="del-badge">+${r.d30}</span>` : "-";
+            let d15 = r.d15 > 0 ? `<span class="del-badge">+${r.d15}</span>` : "-";
+            let r30c = r.r30 < SAFETY ? "stock-low" : "";
+            let r15c = r.r15 < SAFETY ? "stock-low" : "";
+
+            tr.innerHTML = `
+                <td>${r.date}</td>
+                <td>${r.day}</td>
+                <td>${r.note}</td>
+                <td>${r.u30 > 0 ? r.u30 : '-'}</td>
+                <td>${r.u15 > 0 ? r.u15 : '-'}</td>
+                <td>${d30}</td>
+                <td>${d15}</td>
+                <td class="${r30c}">${r.r30.toFixed(1)}</td>
+                <td class="${r15c}">${r.r15.toFixed(1)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('resultSection').style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
