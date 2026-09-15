@@ -1,0 +1,73 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CO₂ 气瓶配送计算器</title>
+<style>
+body{font-family:Arial,"Microsoft YaHei",sans-serif;background:#f4f6f8;margin:0;color:#222}.wrap{max-width:1100px;margin:auto;padding:20px}.box{background:#fff;padding:18px;border-radius:12px;margin-bottom:15px}h1{margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}label{font-weight:bold;font-size:13px;display:block}input{width:100%;box-sizing:border-box;padding:9px;margin-top:5px;border:1px solid #bbb;border-radius:6px}.days label{display:inline-block;margin:6px 12px 0 0;font-weight:normal}.days input{width:auto}button{padding:12px 25px;background:#1677ff;color:#fff;border:0;border-radius:7px;font-size:16px;cursor:pointer}.msg{margin-top:12px;padding:10px;background:#eef6ff;border-radius:7px}.err{background:#fff1f0;color:#b42318}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}th,td{padding:8px;border-bottom:1px solid #ddd;text-align:center}th{background:#f1f5f9}.summary{display:flex;gap:12px;flex-wrap:wrap}.summary div{background:#f6f8fa;padding:12px;border-radius:8px;min-width:150px}.note{font-size:13px;color:#555;line-height:1.6}
+</style><body><div class="wrap">
+<div class="box"><h1>演出 CO₂ 气瓶配送与更换计算器</h1><div class="note">简化稳定版：点击按钮后直接生成每日消耗、配送和库存计划。</div></div>
+<div class="box"><div class="grid">
+<div><label>开始日期</label><input id="startDate" type="date"></div>
+<div><label>结束日期</label><input id="endDate" type="date"></div>
+<div><label>30L：开始时侧台满瓶余量</label><input id="initial30" type="number" value="0" min="0"></div>
+<div><label>15L：开始时场内满瓶数量</label><input id="initial15" type="number" value="0" min="0"></div>
+<div><label>场内30L最大数量（含台上）</label><input id="capacity30" type="number" value="30" min="14"></div>
+<div><label>场内15L最大数量</label><input id="capacity15" type="number" value="10" min="2"></div>
+<div><label>供应商30L总可用数量</label><input id="supplier30" type="number" value="999" min="14"></div>
+<div><label>供应商15L总可用数量</label><input id="supplier15" type="number" value="999" min="2"></div>
+</div></div>
+<div class="box"><b>允许配送的星期</b><div class="days" id="dayChoices"></div><p><button type="button" id="calculateButton">开始计算配送计划</button></p><div id="message" class="msg">请填写日期后点击计算。</div></div>
+<div class="box"><h2>结果汇总</h2><div id="summary" class="summary"></div><div class="scroll"><table><thead><tr><th>日期</th><th>星期</th><th>演出</th><th>30L消耗</th><th>30L配送</th><th>30L剩余</th><th>15L消耗</th><th>15L配送</th><th>15L剩余</th><th>备注</th></tr></thead><tbody id="resultBody"></tbody></table></div></div>
+</div>
+<script>
+(function(){
+"use strict";
+var names=["周日","周一","周二","周三","周四","周五","周六"];
+var choice=document.getElementById("dayChoices");
+for(var i=0;i<7;i++){var lab=document.createElement("label"), cb=document.createElement("input");cb.type="checkbox";cb.value=i;if(i===2||i===5)cb.checked=true;lab.appendChild(cb);lab.appendChild(document.createTextNode(" "+names[i]));choice.appendChild(lab);}
+function val(id){return Number(document.getElementById(id).value)||0;}
+function parseDate(s){return new Date(s+"T12:00:00");}
+function fmt(x){var y=x.getFullYear(),m=String(x.getMonth()+1).padStart(2,"0"),d=String(x.getDate()).padStart(2,"0");return y+"-"+m+"-"+d;}
+function plus(x,n){var y=new Date(x.getTime());y.setDate(y.getDate()+n);return y;}
+function performances(w){if(w===1)return 0;if(w===6||w===0)return 2;return 1;}
+function consumption30(w){var a=[12,0,2,4,2,10,6];return a[w];}
+function consumption15(w){return w===2?2:0;} // 每周2瓶
+function run(){
+ var msg=document.getElementById("message"), body=document.getElementById("resultBody"), summary=document.getElementById("summary");
+ body.innerHTML="";summary.innerHTML="";
+ var ss=document.getElementById("startDate").value,ee=document.getElementById("endDate").value;
+ if(!ss||!ee){msg.className="msg err";msg.textContent="请先选择开始日期和结束日期。";return;}
+ var S=parseDate(ss),E=parseDate(ee);if(E<S){msg.className="msg err";msg.textContent="结束日期不能早于开始日期。";return;}
+ var allowed={};var boxes=choice.querySelectorAll("input:checked");for(var i=0;i<boxes.length;i++)allowed[Number(boxes[i].value)]=true;
+ if(Object.keys(allowed).length===0){msg.className="msg err";msg.textContent="至少选择一个允许配送的星期。";return;}
+ var cap30=val("capacity30"),cap15=val("capacity15"),sup30=val("supplier30"),sup15=val("supplier15");
+ var inv30=14+val("initial30"),inv15=val("initial15"),deliveryDays=0,totalD30=0,totalD15=0,max30=inv30,max15=inv15,warnings=[];
+ if(inv30>cap30)warnings.push("开始时30L库存超过场地容量。");if(inv30>sup30)warnings.push("开始时30L库存超过供应商总量。");
+ for(var cur=new Date(S.getTime());cur<=E;cur=plus(cur,1)){
+   var w=cur.getDay(),u30=consumption30(w),u15=consumption15(w),d30=0,d15=0,note=[];
+   if(allowed[w]){
+     // 从今天到下一配送日前一天的需求 + 结束后保留2瓶
+     var need30=0,need15=0,x=new Date(cur.getTime());
+     while(x<=E){need30+=consumption30(x.getDay());need15+=consumption15(x.getDay());x=plus(x,1);if(x<=E&&allowed[x.getDay()])break;}
+     var target30=Math.max(14,need30+2),target15=need15+2;
+     d30=Math.max(0,target30-inv30);d15=Math.max(0,target15-inv15);
+     if(inv30+d30>cap30){warnings.push(fmt(cur)+"：30L场地容量不足以覆盖到下一配送日。");d30=Math.max(0,cap30-inv30);}
+     if(inv15+d15>cap15){warnings.push(fmt(cur)+"：15L场地容量不足以覆盖到下一配送日。");d15=Math.max(0,cap15-inv15);}
+     if(d30>0||d15>0){deliveryDays++;totalD30+=d30;totalD15+=d15;note.push("配送补充至下一配送日前");}
+     inv30+=d30;inv15+=d15;max30=Math.max(max30,inv30);max15=Math.max(max15,inv15);
+   }
+   if(inv30<u30+2)warnings.push(fmt(cur)+"：30L不足以满足当天消耗并保留2瓶备用。");
+   if(inv15<u15+2)warnings.push(fmt(cur)+"：15L不足以满足当天消耗并保留2瓶备用。");
+   inv30-=u30;inv15-=u15;
+   if(w===2||w===6)note.push("30L大换新日");
+   var tr=document.createElement("tr");tr.innerHTML="<td>"+fmt(cur)+"</td><td>"+names[w]+"</td><td>"+performances(w)+"场</td><td>"+u30+"</td><td>"+(d30||"-")+"</td><td>"+inv30+"</td><td>"+u15+"</td><td>"+(d15||"-")+"</td><td>"+inv15+"</td><td>"+note.join("；")+"</td>";body.appendChild(tr);
+ }
+ if(max30>sup30)warnings.push("30L峰值库存 "+max30+" 超过供应商总可用 "+sup30+"。");
+ if(max15>sup15)warnings.push("15L峰值库存 "+max15+" 超过供应商总可用 "+sup15+"。");
+ summary.innerHTML="<div>实际配送次数<br><b>"+deliveryDays+" 次</b></div><div>新增30L配送<br><b>"+totalD30+" 瓶</b></div><div>新增15L配送<br><b>"+totalD15+" 瓶</b></div><div>结束30L剩余<br><b>"+inv30+" 瓶</b></div><div>结束15L剩余<br><b>"+inv15+" 瓶</b></div>";
+ if(warnings.length){msg.className="msg err";msg.innerHTML="<b>计算完成，但发现限制问题：</b><br>"+warnings.join("<br>");}
+ else{msg.className="msg";msg.textContent="✓ 计算完成。下方已生成配送计划。";}
+}
+document.getElementById("calculateButton").addEventListener("click",run);
+var today=new Date(),s=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
+document.getElementById("startDate").value=s;document.getElementById("endDate").value=fmt(plus(today,14));
+})();
+</script></body></html>
